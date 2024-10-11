@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top 21 Pares USDT com Maior Variação Negativa em 24h - Binance</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 2px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .flash-green {
+            animation: flash-green 0.5s alternate infinite;
+        }
+        .flash-red {
+            animation: flash-red 0.5s alternate infinite;
+        }
+        @keyframes flash-green {
+            from { background-color: #00ff00; }
+            to { background-color: white; }
+        }
+        @keyframes flash-red {
+            from { background-color: #ff0000; }
+            to { background-color: white; }
+        }
+        .alert-initial {
+            color: white;
+        }
+        .alert-buy {
+            background-color: green;
+            color: black;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .alert-sell {
+            background-color: red;
+            color: black;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .alert-all-equal {
+            background-color: transparent;
+            color: white;
+            font-weight: normal;
+            font-size: 12px;
+        }
+        .volume-positive {
+            color: green;
+            font-weight: bold;
+        }
+        .volume-negative {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h3>Pares USDT que Saíram dos Top 21 com Maior Variação Negativa</h3>
+    <table id="removed-assets-table">
+        <thead>
+            <tr>
+                <th>Par</th>
+                <th>Última Variação 24h (%)</th>
+                <th>Último Volume (Variação %)</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <h3>Top 21 Pares USDT com Maior Variação Negativa em 24h - Binance</h3>
+    <table id="crypto-table">
+        <thead>
+            <tr>
+                <th>Par</th>
+                <th>Variação 24h (%)</th>
+                <th>Alerta</th>
+                <th>Volume (Variação %)</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <script>
+        let lastData = {};
+        let accumulatedVolumeChange = {};
+        let alertsActive = false;
+        let removedAssets = [];
+        let removedTimestamps = {};
+
+        function calculatePercentageChange(newValue, oldValue) {
+            if (oldValue === 0) return 0;
+            return ((newValue - oldValue) / oldValue * 100).toFixed(2);
+        }
+
+        function activateAlerts() {
+            alertsActive = true;
+        }
+
+        function canBeRemoved(symbol) {
+            const now = new Date().getTime();
+            const lastRemovedTime = removedTimestamps[symbol] || 0;
+            return (now - lastRemovedTime) > 1800000;
+        }
+
+        async function updateRemovedAssetsVolumes() {
+            try {
+                const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+                if (!response.ok) {
+                    throw new Error('Erro ao buscar dados da API');
+                }
+                const data = await response.json();
+
+                const assets = data.filter(asset => asset.symbol.endsWith('USDT'));
+
+                removedAssets.forEach(asset => {
+                    const updatedAsset = assets.find(a => a.symbol === asset.symbol);
+                    if (updatedAsset) {
+                        const currentVolume = parseFloat(updatedAsset.volume).toFixed(2);
+                        const volumeChangePercent = calculatePercentageChange(currentVolume, asset.previousVolume);
+
+                        asset.volumeChangePercent = volumeChangePercent;
+                        asset.previousVolume = currentVolume;
+                    }
+                });
+
+                renderRemovedAssets();
+            } catch (error) {
+                console.error('Erro ao buscar ou processar dados:', error);
+            }
+        }
+
+        function renderRemovedAssets() {
+            const removedTableBody = document.querySelector('#removed-assets-table tbody');
+            removedTableBody.innerHTML = '';
+
+            removedAssets.forEach(asset => {
+                const volumeClass = asset.volumeChangePercent >= 0 ? 'volume-positive' : 'volume-negative';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${asset.symbol}</td>
+                    <td>${asset.priceChangePercent}%</td>
+                    <td class="${volumeClass}">${asset.volumeChangePercent}%</td>
+                `;
+                removedTableBody.appendChild(row);
+            });
+        }
+
+        async function fetchData() {
+            try {
+                const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+                if (!response.ok) {
+                    throw new Error('Erro ao buscar dados da API');
+                }
+                const data = await response.json();
+
+                const topAssets = data
+                    .filter(asset => asset.symbol.endsWith('USDT') && parseFloat(asset.priceChangePercent) < 0)
+                    .sort((a, b) => parseFloat(a.priceChangePercent) - parseFloat(b.priceChangePercent))
+                    .slice(0, 21);
+
+                const tableBody = document.querySelector('#crypto-table tbody');
+                tableBody.innerHTML = '';
+
+                const currentSymbols = topAssets.map(asset => asset.symbol);
+
+                Object.keys(lastData).forEach(symbol => {
+                    if (!currentSymbols.includes(symbol) && canBeRemoved(symbol)) {
+                        const removedAsset = {
+                            symbol: symbol,
+                            priceChangePercent: lastData[symbol].priceChangePercent,
+                            volumeChangePercent: calculatePercentageChange(lastData[symbol].volume, lastData[symbol].volume),
+                            previousVolume: lastData[symbol].volume
+                        };
+                        removedAssets.push(removedAsset);
+                        removedTimestamps[symbol] = new Date().getTime();
+                    }
+                });
+
+                removedAssets = removedAssets.slice(-21);
+                renderRemovedAssets();
+
+                const now = new Date();
+
+                topAssets.forEach(asset => {
+                    const priceChangePercent = parseFloat(asset.priceChangePercent).toFixed(2);
+                    const currentVolume = parseFloat(asset.volume).toFixed(2);
+
+                    const previous = lastData[asset.symbol] || { priceChangePercent: 0, volume: 0, alert: '', alertClass: 'alert-initial', timestamp: now.getTime() };
+
+                    const volumeChangePercent = calculatePercentageChange(currentVolume, previous.volume);
+
+                    let alertMessage = previous.alert;
+                    let alertClass = previous.alertClass;
+
+                    const priceIncreased = priceChangePercent - previous.priceChangePercent > 1;
+                    const priceDecreased = previous.priceChangePercent - priceChangePercent > 1;
+
+                    const time = now.toLocaleTimeString();
+
+                    if (alertsActive) {
+                        if (priceIncreased) {
+                            alertMessage = `Alerta de Compra - ${time}`;
+                            alertClass = 'alert-buy';
+                        } else if (priceDecreased) {
+                            alertMessage = `Alerta de Venda - ${time}`;
+                            alertClass = 'alert-sell';
+                        }
+                    }
+
+                    const volumeClass = volumeChangePercent >= 0 ? 'volume-positive' : 'volume-negative';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${asset.symbol}</td>
+                        <td>${priceChangePercent}%</td>
+                        <td class="${alertClass}">${alertMessage}</td>
+                        <td class="${volumeClass}">${volumeChangePercent}%</td>
+                    `;
+                    tableBody.appendChild(row);
+
+                    lastData[asset.symbol] = { priceChangePercent: priceChangePercent, volume: currentVolume, alert: alertMessage, alertClass: alertClass, timestamp: now.getTime() };
+                });
+            } catch (error) {
+                console.error('Erro ao buscar ou processar dados:', error);
+            }
+        }
+
+        setInterval(fetchData, 10000);
+        setInterval(updateRemovedAssetsVolumes, 10000);
+        setTimeout(activateAlerts, 30000);
+    </script>
+</body>
+</html>
